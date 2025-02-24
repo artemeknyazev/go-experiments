@@ -302,7 +302,36 @@ func ThreeWayQuickSort[T cmp.Ordered](xs []T) {
 	ThreeWayQuickSort(xs[j:])
 }
 
-func TestSort(buf []uint16, sort func(xs []uint16), seed uint16, pow int, iters int) {
+// Based on Sedgewick, Algorithms in C++, prog. 7.6.
+func Select[T cmp.Ordered](xs []T, k int) {
+	if len(xs) <= 1 {
+		return
+	}
+
+	p := Partition(xs)
+	if p > k {
+		Select(xs[:p], k)
+	}
+	if p < k {
+		Select(xs[p+1:], k-p-1)
+	}
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 7.7.
+func NonRecursiveSelect[T cmp.Ordered](xs []T, k int) {
+	l, r := 0, len(xs)
+	for r > l+1 {
+		p := l + Partition(xs[l:r])
+		if p >= k {
+			r = p
+		}
+		if p <= k {
+			l = p + 1
+		}
+	}
+}
+
+func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
 	_, file, line, _ := runtime.Caller(1)
 
 	nextSeed := seed
@@ -315,11 +344,51 @@ func TestSort(buf []uint16, sort func(xs []uint16), seed uint16, pow int, iters 
 			nextSeed = FillUint16Array(xs, initialSeed)
 			// fmt.Printf("  seed:   %v\n", initialSeed)
 			// fmt.Printf("  before: %v\n", xs)
-			sort(xs)
+			fn(xs)
 			// fmt.Printf("  after:  %v\n", xs)
 			// fmt.Println("  sorted:", IsSorted(xs))
 			if !IsSorted(xs) {
-				fmt.Printf("%s failed for len=%d, seed=%d at %s:%d\n", GetFunctionName(sort), length, initialSeed, file, line)
+				fmt.Printf("%s failed for len=%d, seed=%d at %s:%d\n", GetFunctionName(fn), length, initialSeed, file, line)
+				return
+			}
+		}
+	}
+}
+
+// https://stackoverflow.com/a/75435478
+func All[T any](xs []T, predicate func(T) bool) bool {
+	for _, x := range xs {
+		if !predicate(x) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestSelect(buf []uint16, fn func(xs []uint16, k int), seed uint16, pow int, iters int) {
+	_, file, line, _ := runtime.Caller(1)
+
+	nextSeed := seed
+	for p := 0; p <= pow; p++ {
+		length := 1 << p
+		xs := buf[:length]
+
+		for i := 0; i < iters; i++ {
+			initialSeed := nextSeed
+			nextSeed = FillUint16Array(xs, initialSeed)
+			nextSeed = XorShift16(nextSeed)
+			k := int(float32(len(xs)) * float32(nextSeed) / float32(1<<16))
+			nextSeed = XorShift16(nextSeed)
+			// fmt.Printf("  seed:   %v\n", initialSeed)
+			// fmt.Printf("  k:      %v of %v\n", k, len(xs))
+			// fmt.Printf("  before: %v\n", xs)
+			fn(xs, k)
+			// fmt.Printf("  after:  %v\n", xs)
+			partitionedLeft := All(xs[:k], func(x uint16) bool { return x <= xs[k] })
+			partitionedRight := All(xs[k+1:], func(x uint16) bool { return x >= xs[k] })
+			// fmt.Println("  sorted:", partitionedLeft, partitionedRight)
+			if !partitionedLeft || !partitionedRight {
+				fmt.Printf("%s failed for len=%d, seed=%d, k=%d at %s:%d\n", GetFunctionName(fn), length, initialSeed, k, file, line)
 				return
 			}
 		}
@@ -329,14 +398,12 @@ func TestSort(buf []uint16, sort func(xs []uint16), seed uint16, pow int, iters 
 func main() {
 	// {
 	// 	fmt.Printf("Selection sort:\n")
-	// 	var length int = 4
-	// 	var seed uint16 = 3508
+	// 	var length int = 16
+	// 	var seed uint16 = 3509
 	// 	xs := make([]uint16, length)
 	// 	FillUint16Array(xs, seed)
 	// 	fmt.Printf("  before: %v\n", xs)
-	// 	// ix := Partition(xs)
-	// 	// fmt.Printf("  ix:     %d\n", ix)
-	// 	QuickSortNonRecursive(xs)
+	// 	Select(xs, 6)
 	// 	fmt.Printf("  after:  %v\n", xs)
 	// }
 	// return
@@ -353,7 +420,10 @@ func main() {
 	TestSort(buf, QuickSort, 1, pow, 10000)
 	TestSort(buf, NonRecursiveQuickSort, 1, pow, 10000)
 	TestSort(buf, HybridQuickSort, 1, pow, 10000)
+	TestSelect(buf, Select, 1, pow, 10000)
+	TestSelect(buf, NonRecursiveSelect, 1, pow, 10000)
 
 	// TestSort(buf, CountSort, 1, pow, 100) // TODO:
 	// TestSort(buf, BucketSort, 1, pow, 100) // TODO:
+	// TestSort(buf, ThreeWayQuickSort, 1, pow, 10000) // TODO:
 }
