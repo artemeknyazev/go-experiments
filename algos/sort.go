@@ -345,7 +345,7 @@ func Assert(flag bool, msg string) {
 func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 	N, M := len(xs), len(ys)
 
-	Assert(cap(out) >= N+M, "out array is smaller than sum of lengths of input arrays")
+	Assert(len(out) >= N+M, "out array is smaller than sum of lengths of input arrays")
 	Assert(!IsSorted(xs), "xs is not sorted")
 	Assert(!IsSorted(ys), "ys is not sorted")
 
@@ -372,6 +372,45 @@ func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 	}
 
 	Assert(!IsSorted(xs[:N+M]), "out array must be sorted")
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 8.2.
+// Does only one check inside the loop compared to MergeInto which does three checks
+// TODO: write a test
+func MergeInside[T cmp.Ordered](xs []T, m int, aux []T) {
+
+	Assert(!IsSorted(xs[:m]), "input array part before provided index must be sorted")
+	Assert(!IsSorted(xs[m:]), "input array part after provided index must be sorted")
+	Assert(len(aux) >= len(xs), "buffer is smaller than the merged array")
+
+	i, j, r := 0, 0, len(xs)-1
+
+	// Copies left part of xs into left part of aux in forward order
+	// aux[l:m] = xs[l:m]
+	for i = m + 1; i > 0; i-- {
+		aux[i-1] = xs[i-1]
+	}
+	// i = 0, left border of aux = left border of the left part of xs
+
+	// Copies right part of xs into right part of aux in reverse order
+	// aux[m:r] = reverse(xs[m+1:r])
+	for j = m; j < r; j++ {
+		aux[r+m-j] = xs[j+1]
+	}
+	// j = r, right border of aux = left border of the reversed right part of xs
+
+	// Merges aux[l:m] with left part of xs and aux[m:r] with reversed right part of xs into xs
+	for k := 0; k <= r; k++ {
+		if cmp.Less(aux[j], aux[i]) {
+			xs[k] = aux[j]
+			j--
+		} else {
+			xs[k] = aux[i]
+			i++
+		}
+	}
+
+	Assert(!IsSorted(xs), "input array after merge must be sorted")
 }
 
 func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
