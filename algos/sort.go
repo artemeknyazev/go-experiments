@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 )
@@ -329,6 +330,48 @@ func NonRecursiveSelect[T cmp.Ordered](xs []T, k int) {
 			l = p + 1
 		}
 	}
+}
+
+func Assert(flag bool, msg string) {
+	if !flag {
+		_, file, line, _ := runtime.Caller(1)
+		fmt.Fprintf(os.Stderr, "%s at %s:%d", msg, file, line)
+		os.Exit(1)
+	}
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 8.1.
+// TODO: write a test
+func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
+	N, M := len(xs), len(ys)
+
+	Assert(cap(out) >= N+M, "out array is smaller than sum of lengths of input arrays")
+	Assert(!IsSorted(xs), "xs is not sorted")
+	Assert(!IsSorted(ys), "ys is not sorted")
+
+	for i, j, k := 0, 0, 0; k < N+M; k++ {
+		if i == N {
+			out[k] = ys[j]
+			j++
+			continue
+		}
+
+		if j == M {
+			out[k] = xs[i]
+			i++
+			continue
+		}
+
+		if cmp.Less(xs[i], ys[j]) {
+			out[k] = xs[i]
+			i++
+		} else {
+			out[k] = ys[j]
+			j++
+		}
+	}
+
+	Assert(!IsSorted(xs[:N+M]), "out array must be sorted")
 }
 
 func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
