@@ -286,6 +286,22 @@ func HybridQuickSort[T cmp.Ordered](xs []T) {
 	InsertionSort2(xs)
 }
 
+// Based on Sedgewick, Algorithms in C++, prog. 7.5.
+func ThreeWayPartition[T cmp.Ordered](xs []T) (int, int) {
+	// TODO: implement
+	return 0, 0
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 7.5.
+func ThreeWayQuickSort[T cmp.Ordered](xs []T) {
+	if len(xs) <= 1 {
+		return
+	}
+	i, j := ThreeWayPartition(xs)
+	ThreeWayQuickSort(xs[:i])
+	ThreeWayQuickSort(xs[j:])
+}
+
 func TestSort(buf []uint16, sort func(xs []uint16), seed uint16, pow int, iters int) {
 	_, file, line, _ := runtime.Caller(1)
 
