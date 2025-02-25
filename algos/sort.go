@@ -348,8 +348,8 @@ func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 	N, M := len(xs), len(ys)
 
 	Assert(len(out) >= N+M, "out array is smaller than sum of lengths of input arrays")
-	Assert(!IsSorted(xs), "xs is not sorted")
-	Assert(!IsSorted(ys), "ys is not sorted")
+	Assert(IsSorted(xs), "xs is not sorted")
+	Assert(IsSorted(ys), "ys is not sorted")
 
 	for i, j, k := 0, 0, 0; k < N+M; k++ {
 		if i == N {
@@ -373,7 +373,7 @@ func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 		}
 	}
 
-	Assert(!IsSorted(xs[:N+M]), "out array must be sorted")
+	Assert(IsSorted(out[:N+M]), "out array must be sorted")
 }
 
 // Based on Sedgewick, Algorithms in C++, prog. 8.2.
@@ -446,9 +446,7 @@ func MergeInto2[T cmp.Ordered](out []T, xs []T, ys []T, aux []T) {
 	r := lx + ly - 1
 
 	// Copy xs forwards into aux
-	for i := 0; i < lx; i++ {
-		aux[i] = xs[i]
-	}
+	copy(aux, xs)
 
 	// Copy ys backwards into aux
 	for j := lx; j <= r; j++ {
@@ -496,6 +494,40 @@ func TopDownMergeSort[T cmp.Ordered](xs []T, aux []T) {
 	TopDownMergeSort(ys, aux)
 	TopDownMergeSort(zs, aux)
 	MergeInto2(xs, ys, zs, aux)
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 8.4.
+func topDownMergeSortABImpl[T cmp.Ordered](xs []T, aux []T) {
+	// fmt.Printf("topDownMergeSortABImpl\n  xs:  %v\n  aux: %v\n", xs, aux)
+	ln := len(xs)
+	if ln <= 1 {
+		return
+	}
+	// if ln <= 10 {
+	// 	InsertionSort(xs)
+	// 	return
+	// }
+
+	m := (ln + 1) / 2 // =1+(ln-1)/2
+
+	// Swap aux and xs to prevent copying step in merge routine
+	topDownMergeSortABImpl(aux[:m], xs[:m])
+	topDownMergeSortABImpl(aux[m:], xs[m:])
+	// fmt.Printf("  m:   %v\n  aux[:m]:  %v\n  aux[m:]: %v\n", m, aux[:m], aux[m:])
+	// Swap aux and xs back
+	MergeInto(xs, aux[:m], aux[m:])
+	// fmt.Printf("  xs:   %v\n", xs)
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 8.4.
+func TopDownMergeSortAB[T cmp.Ordered](xs []T, aux []T) {
+	Assert(len(aux) >= len(xs), "aux must have at least the same length as xs")
+
+	// We swap aux and xs, so they must contain the same data
+	aux = aux[:len(xs)]
+	copy(aux, xs)
+
+	topDownMergeSortABImpl(xs, aux)
 }
 
 func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
@@ -563,6 +595,12 @@ func TestSelect(buf []uint16, fn func(xs []uint16, k int), seed uint16, pow int,
 }
 
 func main() {
+	// xs := []int{1, 2, 3, 4, 5}
+	// ys := []int{0, 0, 0, 0, 0, 1, 1, 1, 1}
+	// copy(ys, xs)
+	// fmt.Printf("%v\n", ys)
+	// return
+
 	pow := 12
 	buf := make([]uint16, 1<<pow)
 	aux := make([]uint16, 1<<pow)
@@ -573,7 +611,7 @@ func main() {
 	// 	xs := buf[:length]
 	// 	FillUint16Array(xs, seed)
 	// 	fmt.Printf("a: %v\n", xs)
-	// 	TopDownMergeSort(xs, aux)
+	// 	TopDownMergeSortAB(xs, aux)
 	// 	fmt.Printf("b: %v\n", xs)
 	// 	Assert(IsSorted(xs), "not sorted")
 	// }
@@ -590,7 +628,8 @@ func main() {
 	// TestSort(buf, HybridQuickSort, 1, pow, 10000)
 	// TestSelect(buf, Select, 1, pow, 10000)
 	// TestSelect(buf, NonRecursiveSelect, 1, pow, 10000)
-	TestSort(buf, func(xs []uint16) { TopDownMergeSort(xs, aux) }, 1, pow, 10000)
+	// TestSort(buf, func(xs []uint16) { TopDownMergeSort(xs, aux) }, 1, pow, 10000)
+	TestSort(buf, func(xs []uint16) { TopDownMergeSortAB(xs, aux) }, 1, pow, 10000)
 
 	// TestSort(buf, CountSort, 1, pow, 100) // TODO:
 	// TestSort(buf, BucketSort, 1, pow, 100) // TODO:
