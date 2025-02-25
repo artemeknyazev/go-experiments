@@ -433,7 +433,7 @@ func MergeInto2[T cmp.Ordered](out []T, xs []T, ys []T, aux []T) {
 	// fmt.Printf("MergeInto2:\n")
 	// fmt.Printf("  xs: %v\n", xs)
 	// fmt.Printf("  ys: %v\n", ys)
-	// fmt.Printf("  aux: %v\n", aux)
+	// fmt.Printf("  aux: %v\n", aux[:len(out)])
 	// fmt.Printf("  out: %v\n", out)
 	Assert(IsSorted(xs), "xs must be sorted")
 	Assert(IsSorted(ys), "ys must be sorted")
@@ -466,6 +466,7 @@ func MergeInto2[T cmp.Ordered](out []T, xs []T, ys []T, aux []T) {
 		}
 	}
 
+	// fmt.Printf("  out: %v\n", out)
 	Assert(IsSorted(out), "output array after merge must be sorted")
 }
 
@@ -528,6 +529,16 @@ func TopDownMergeSortAB[T cmp.Ordered](xs []T, aux []T) {
 	copy(aux, xs)
 
 	topDownMergeSortABImpl(xs, aux)
+}
+
+func BottomUpMergeSort[T cmp.Ordered](xs []T, aux []T) {
+	ln := len(xs)
+	for m := 1; m < ln; m += m {
+		for i := 0; i <= ln-m; i += m + m {
+			r := min(i+m+m, ln)
+			MergeInto2(xs[i:r], xs[i:i+m], xs[i+m:r], aux)
+		}
+	}
 }
 
 func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
@@ -606,12 +617,12 @@ func main() {
 	aux := make([]uint16, 1<<pow)
 
 	// {
-	// 	var length int = 16
-	// 	var seed uint16 = 3509
+	// 	var length int = 19
+	// 	var seed uint16 = 3501
 	// 	xs := buf[:length]
 	// 	FillUint16Array(xs, seed)
 	// 	fmt.Printf("a: %v\n", xs)
-	// 	TopDownMergeSortAB(xs, aux)
+	// 	BottomUpMergeSort(xs, aux)
 	// 	fmt.Printf("b: %v\n", xs)
 	// 	Assert(IsSorted(xs), "not sorted")
 	// }
@@ -629,7 +640,8 @@ func main() {
 	// TestSelect(buf, Select, 1, pow, 10000)
 	// TestSelect(buf, NonRecursiveSelect, 1, pow, 10000)
 	// TestSort(buf, func(xs []uint16) { TopDownMergeSort(xs, aux) }, 1, pow, 10000)
-	TestSort(buf, func(xs []uint16) { TopDownMergeSortAB(xs, aux) }, 1, pow, 10000)
+	// TestSort(buf, func(xs []uint16) { TopDownMergeSortAB(xs, aux) }, 1, pow, 10000)
+	TestSort(buf, func(xs []uint16) { BottomUpMergeSort(xs, aux) }, 1, pow, 10000)
 
 	// TestSort(buf, CountSort, 1, pow, 100) // TODO:
 	// TestSort(buf, BucketSort, 1, pow, 100) // TODO:
