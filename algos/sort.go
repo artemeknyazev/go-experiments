@@ -336,11 +336,13 @@ func Assert(flag bool, msg string) {
 	if !flag {
 		_, file, line, _ := runtime.Caller(1)
 		fmt.Fprintf(os.Stderr, "%s at %s:%d", msg, file, line)
+		fmt.Fprint(os.Stderr, "\n")
 		os.Exit(1)
 	}
 }
 
 // Based on Sedgewick, Algorithms in C++, prog. 8.1.
+// Assumes out, xs, and ys do not intersect!
 // TODO: write a test
 func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 	N, M := len(xs), len(ys)
@@ -375,12 +377,16 @@ func MergeInto[T cmp.Ordered](out []T, xs []T, ys []T) {
 }
 
 // Based on Sedgewick, Algorithms in C++, prog. 8.2.
-// Does only one check inside the loop compared to MergeInto which does three checks
+// Does only one check inside the loop compared to MergeInto which does three checks.
 // TODO: write a test
 func MergeInside[T cmp.Ordered](xs []T, m int, aux []T) {
+	// fmt.Printf("MergeInside:\n")
+	// fmt.Printf("  m: %v\n", m)
+	// fmt.Printf("  l: %v\n", xs[:m+1])
+	// fmt.Printf("  r: %v\n", xs[m+1:])
 
-	Assert(!IsSorted(xs[:m]), "input array part before provided index must be sorted")
-	Assert(!IsSorted(xs[m:]), "input array part after provided index must be sorted")
+	Assert(IsSorted(xs[:m+1]), "input array part before provided index must be sorted")
+	Assert(IsSorted(xs[m+1:]), "input array part after provided index must be sorted")
 	Assert(len(aux) >= len(xs), "buffer is smaller than the merged array")
 
 	i, j, r := 0, 0, len(xs)-1
@@ -410,7 +416,86 @@ func MergeInside[T cmp.Ordered](xs []T, m int, aux []T) {
 		}
 	}
 
-	Assert(!IsSorted(xs), "input array after merge must be sorted")
+	// fmt.Printf("  xs: %v\n", xs)
+	Assert(IsSorted(xs), "input array after merge must be sorted")
+}
+
+// Merges two slices into an output slice using an auxiliary array.
+// out, xs, ys can intersect. Assumes aux doesn't intersect with other arrays.
+//
+// Assumes that:
+//   - out, xs, ys can intersect
+//   - aux doesn't intersect with other arrays
+//   - xs and ys are sorted
+//   - len(out) == len(xs)+len(ys)
+//   - len(aux) >= len(xs)+len(ys)
+func MergeInto2[T cmp.Ordered](out []T, xs []T, ys []T, aux []T) {
+	// fmt.Printf("MergeInto2:\n")
+	// fmt.Printf("  xs: %v\n", xs)
+	// fmt.Printf("  ys: %v\n", ys)
+	// fmt.Printf("  aux: %v\n", aux)
+	// fmt.Printf("  out: %v\n", out)
+	Assert(IsSorted(xs), "xs must be sorted")
+	Assert(IsSorted(ys), "ys must be sorted")
+	Assert(len(out) == len(xs)+len(ys), "out is smaller than xs and ys combined")
+	Assert(len(aux) >= len(out), "aux is smaller than out")
+
+	lx, ly := len(xs), len(ys)
+
+	// Right boundary of aux and out
+	r := lx + ly - 1
+
+	// Copy xs forwards into aux
+	for i := 0; i < lx; i++ {
+		aux[i] = xs[i]
+	}
+
+	// Copy ys backwards into aux
+	for j := lx; j <= r; j++ {
+		aux[j] = ys[r-j] // r-j = lx + ly - 1 - (lx + offset) = ly - 1 - offset
+	}
+
+	// k counts total number of elements minus 1 which is r
+	// i starts from the left boundary 0 and goes up to lx-1
+	// j starts from the right boundary r and goes down to lx
+	for k, i, j := 0, 0, r; k <= r; k++ {
+		if cmp.Less(aux[j], aux[i]) {
+			out[k] = aux[j]
+			j--
+		} else {
+			out[k] = aux[i]
+			i++
+		}
+	}
+
+	Assert(IsSorted(out), "output array after merge must be sorted")
+}
+
+// Based on Sedgewick, Algorithms in C++, prog. 8.2.
+// Uses MergeInto2 to simplify working with slices.
+func TopDownMergeSort[T cmp.Ordered](xs []T, aux []T) {
+	// fmt.Printf("TopDownMergeSort")
+	// fmt.Printf("  xs: %v\n", xs)
+	ln := len(xs)
+	if ln <= 1 {
+		return
+	}
+
+	// Using an index to split an array
+
+	// m := (ln - 1) / 2 // =(l+r)/2 where l=0, r=len(xs)-1
+	// fmt.Printf("  m: %v\n", m)
+	// TopDownMergeSort(xs[:m+1], aux)
+	// TopDownMergeSort(xs[m+1:], aux)
+	// MergeInside(xs, m, aux)
+
+	// Or using two slices, which looks nicer
+
+	m := (ln + 1) / 2 // =1+(ln-1)/2
+	ys, zs := xs[:m], xs[m:]
+	TopDownMergeSort(ys, aux)
+	TopDownMergeSort(zs, aux)
+	MergeInto2(xs, ys, zs, aux)
 }
 
 func TestSort(buf []uint16, fn func(xs []uint16), seed uint16, pow int, iters int) {
@@ -478,32 +563,34 @@ func TestSelect(buf []uint16, fn func(xs []uint16, k int), seed uint16, pow int,
 }
 
 func main() {
+	pow := 12
+	buf := make([]uint16, 1<<pow)
+	aux := make([]uint16, 1<<pow)
+
 	// {
-	// 	fmt.Printf("Selection sort:\n")
 	// 	var length int = 16
 	// 	var seed uint16 = 3509
-	// 	xs := make([]uint16, length)
+	// 	xs := buf[:length]
 	// 	FillUint16Array(xs, seed)
-	// 	fmt.Printf("  before: %v\n", xs)
-	// 	Select(xs, 6)
-	// 	fmt.Printf("  after:  %v\n", xs)
+	// 	fmt.Printf("a: %v\n", xs)
+	// 	TopDownMergeSort(xs, aux)
+	// 	fmt.Printf("b: %v\n", xs)
+	// 	Assert(IsSorted(xs), "not sorted")
 	// }
 	// return
 
-	pow := 12
-	buf := make([]uint16, 1<<pow)
-
-	TestSort(buf, InsertionSort, 1, pow, 100)
-	TestSort(buf, SelectionSort, 1, pow, 100)
-	TestSort(buf, InsertionSort2, 1, pow, 100)
-	TestSort(buf, BubbleSort, 1, pow, 100)
-	TestSort(buf, BubbleSort2, 1, pow, 100)
-	TestSort(buf, ShellSort, 1, pow, 100)
-	TestSort(buf, QuickSort, 1, pow, 10000)
-	TestSort(buf, NonRecursiveQuickSort, 1, pow, 10000)
-	TestSort(buf, HybridQuickSort, 1, pow, 10000)
-	TestSelect(buf, Select, 1, pow, 10000)
-	TestSelect(buf, NonRecursiveSelect, 1, pow, 10000)
+	// TestSort(buf, InsertionSort, 1, pow, 100)
+	// TestSort(buf, SelectionSort, 1, pow, 100)
+	// TestSort(buf, InsertionSort2, 1, pow, 100)
+	// TestSort(buf, BubbleSort, 1, pow, 100)
+	// TestSort(buf, BubbleSort2, 1, pow, 100)
+	// TestSort(buf, ShellSort, 1, pow, 100)
+	// TestSort(buf, QuickSort, 1, pow, 10000)
+	// TestSort(buf, NonRecursiveQuickSort, 1, pow, 10000)
+	// TestSort(buf, HybridQuickSort, 1, pow, 10000)
+	// TestSelect(buf, Select, 1, pow, 10000)
+	// TestSelect(buf, NonRecursiveSelect, 1, pow, 10000)
+	TestSort(buf, func(xs []uint16) { TopDownMergeSort(xs, aux) }, 1, pow, 10000)
 
 	// TestSort(buf, CountSort, 1, pow, 100) // TODO:
 	// TestSort(buf, BucketSort, 1, pow, 100) // TODO:
