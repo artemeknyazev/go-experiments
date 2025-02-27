@@ -335,8 +335,7 @@ func NonRecursiveSelect[T cmp.Ordered](xs []T, k int) {
 func Assert(flag bool, msg string) {
 	if !flag {
 		_, file, line, _ := runtime.Caller(1)
-		fmt.Fprintf(os.Stderr, "%s at %s:%d", msg, file, line)
-		fmt.Fprint(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "%s at %s:%d\n", msg, file, line)
 		os.Exit(1)
 	}
 }
