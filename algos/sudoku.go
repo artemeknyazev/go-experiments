@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
+	"sort"
 )
 
 func RowColToIx(row, col, dim uint16) uint16 {
@@ -14,8 +16,8 @@ func IxToRowCol(ix, dim uint16) (row, col uint16) {
 	return row, col
 }
 
-func CellCandidates(candidates []bool, ix uint16, n uint16) []bool {
-	return candidates[ix*n : ix*n+n]
+func CellCandidates(constraints []bool, ix uint16, n uint16) []bool {
+	return constraints[ix*n : ix*n+n]
 }
 
 func isRowSolved(board []uint16, row uint16, dim uint16, n uint16) bool {
@@ -162,6 +164,123 @@ func PrintBoard(board []uint16, dim uint16) {
 	fmt.Printf(delim)
 }
 
+func fillConstraintsForCell(constraints []bool, v uint16, row uint16, col uint16, dim uint16, n uint16) {
+	// Update row
+	for c := uint16(0); c < dim; c++ {
+		ixx := RowColToIx(row, c, dim)
+		// println("  row", row, c, ixx, ixx*n+v-1)
+		constraints[ixx*n+v-1] = true
+	}
+
+	// Update column
+	for r := uint16(0); r < dim; r++ {
+		ixx := RowColToIx(r, col, dim)
+		// println("  col", r, col, ixx, ixx*n+v-1)
+		constraints[ixx*n+v-1] = true
+	}
+
+	// Update subboard
+	rr, cc := row/3, col/3
+	for r := uint16(0); r < 3; r++ {
+		for c := uint16(0); c < 3; c++ {
+			ixx := RowColToIx(rr*3+r, cc*3+c, dim)
+			// println("  sub", rr*3+r, cc*3+c, ixx, ixx*n+v-1)
+			constraints[ixx*n+v-1] = true
+		}
+	}
+}
+
+func FillConstraints(constraints []bool, board []uint16, dim uint16, n uint16) {
+	for row := uint16(0); row < dim; row++ {
+		for col := uint16(0); col < dim; col++ {
+			ix := RowColToIx(row, col, dim)
+			v := board[ix]
+			if v == 0 {
+				continue
+			}
+			// println("x", row, col, ix, v)
+
+			fillConstraintsForCell(constraints, v, row, col, dim, n)
+		}
+	}
+}
+
+func Solve(board []uint16, dim uint16, n uint16, step uint16) bool {
+	if int(step) == len(board) {
+		return IsBoardSolved(board, dim, n)
+	}
+
+	// Find constraints for each cell
+	var constraints = make([]bool, dim*dim*n)
+	FillConstraints(constraints, board, dim, n)
+	// fmt.Printf("constraints %v", constraints)
+
+	// List free cells and how many candidate numbers they can have
+	type Move struct {
+		Ix    uint16
+		Count uint16
+	}
+	moves := make([]Move, 0, dim*dim)
+	for r := uint16(0); r < dim; r++ {
+		for c := uint16(0); c < dim; c++ {
+			ix := RowColToIx(r, c, dim)
+			if board[ix] != 0 {
+				continue // Already filled
+			}
+
+			cnt := uint16(0)
+			candidates := CellCandidates(constraints, ix, n)
+			for _, used := range candidates {
+				if !used {
+					cnt++
+				}
+			}
+			if cnt == 0 {
+				return false // No moves for cell
+			}
+			moves = append(moves, Move{Ix: ix, Count: cnt})
+		}
+	}
+
+	// Sort move candidates so that cells w/ less candidate numbers count are first
+	sort.Slice(moves, func(i, j int) bool {
+		left, right := moves[i], moves[j]
+		if left.Count == 0 {
+			return false
+		}
+		if right.Count == 0 {
+			return false
+		}
+		return left.Count < right.Count
+	})
+
+	// println("Solve step", step, ",", len(moveCandidates), "moves left")
+
+	// Try making moves
+	for _, move := range moves {
+		candidates := CellCandidates(constraints, move.Ix, n)
+		row, col := IxToRowCol(move.Ix, dim)
+		// fmt.Printf("checking move %d %d %v\n", row, col, candidates)
+		for candidate, used := range candidates {
+			if used {
+				continue
+			}
+			candidate++                        // Zero-based indexing for 1...n numbers
+			board[move.Ix] = uint16(candidate) // Make move
+			println("  make (", row, col, ") =", candidate, "at step", step)
+			// println(int(step), len(board))
+			// PrintBoard(board, dim)
+			if Solve(board, dim, n, step+1) {
+				return true // Solved
+			}
+			board[move.Ix] = 0 // Revert move
+			println("revert (", row, col, ") =", candidate, "at step", step)
+		}
+	}
+
+	return false // Not solved
+}
+
 // From Skiena, Algorithms, ed. 2, ch. 7.3.
 func FillInit1(board []uint16, dim uint16) {
 	x := uint16(0)
@@ -194,76 +313,36 @@ func FillSol1(board []uint16, dim uint16) {
 	copy(board[8*dim:], []uint16{3, 5, 1 /**/, 9, 4, 7 /**/, 6, 2, 8})
 }
 
-func fillConstraintsForCell(constraints []bool, v uint16, row uint16, col uint16, dim uint16, n uint16) {
-	// Update row
-	for c := uint16(0); c < dim; c++ {
-		ixx := RowColToIx(row, c, dim)
-		println("  row", row, c, ixx, ixx*n+v)
-		constraints[ixx*n+v] = true
-	}
-
-	// Update column
-	for r := uint16(0); r < dim; r++ {
-		ixx := RowColToIx(r, col, dim)
-		println("  col", r, col, ixx, ixx*n+v)
-		constraints[ixx*n+v] = true
-	}
-
-	// Update subboard
-	rr, cc := row/3, col/3
-	for r := uint16(0); r < 3; r++ {
-		for c := uint16(0); c < 3; c++ {
-			ixx := RowColToIx(rr*3+r, cc*3+c, dim)
-			println("  sub", rr*3+r, cc*3+c, ixx, ixx*n+v)
-			constraints[ixx*n+v] = true
+func RemoveFromBoard(board []uint16, dim uint16, m int) {
+	for i, v := range rand.Perm(int(dim * dim)) {
+		if i == m {
+			return
 		}
+		board[v] = 0
 	}
-}
-
-func FillConstraints(constraints []bool, board []uint16, dim uint16, n uint16) {
-	for row := uint16(0); row < dim; row++ {
-		for col := uint16(0); col < dim; col++ {
-			ix := RowColToIx(row, col, dim)
-			v := board[ix]
-			if v == 0 {
-				continue
-			}
-			println("x", row, col, ix, v)
-
-			fillConstraintsForCell(constraints, v, row, col, dim, n)
-		}
-	}
-}
-
-func Solve(board []uint16, dim uint16, n uint16, step uint16) bool {
-	if int(step) == len(board) {
-		return IsBoardSolved(board, dim, n)
-	}
-
-	// Find possible moves
-	// Sort moves
-	// For each move
-	// - make a move
-	// - update constraints
-	// - run solve
-	// - if true return true
-	// - revert constraints change
-	// - revert move
-
-	return false
 }
 
 func main() {
-	var dim uint16 = 9 // Square side
-	var n uint16 = 9   // Count of distinct numbers
-	board := make([]uint16, dim*dim)
-	// FillInit1(board, dim)
-	// FillSol1(board, dim)
-	board[RowColToIx(5, 4, dim)] = 1
+	// TODO: https://stackoverflow.com/questions/6924216/how-to-generate-sudoku-boards-with-unique-solutions
 
-	constraints := make([]bool, dim*dim*n)
-	println(len(constraints))
-	FillConstraints(constraints, board, dim, n)
+	const dim uint16 = 9 // Square side
+	const n uint16 = 9   // Count of distinct numbers
+	var board = make([]uint16, dim*dim)
+
+	// FillInit1(board, dim)
+	// board[RowColToIx(5, 4, dim)] = 1
+	// GenerateBoard(board, dim)
+	FillSol1(board, dim)
+	RemoveFromBoard(board, dim, 40)
 	PrintBoard(board, dim)
-	println(IsBoardSolved(board, dim, n))
+
+	step := uint16(0)
+	for _, v := range board {
+		if v != 0 {
+			step++
+		}
+	}
+	solved := Solve(board, dim, n, step)
+	println("Solved =", solved)
+	PrintBoard(board, dim)
 }
